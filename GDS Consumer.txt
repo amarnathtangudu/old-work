@@ -1,0 +1,76 @@
+﻿Add dependancy in pom.xml
+--------------------------
+<dependency>
+	<groupId>com.zycus.guaranteed_delivery_consumer</groupId>
+	<artifactId>guaranteed_delivery_consumer</artifactId>
+	<version>${LATEST_RELEASED_VERSION_ON_ARTIFACTREPO}</version>
+</dependency>
+
+Implement ConsumerProductCallBack interface
+------------------------------------------
+@Service
+public class ConsumerProductCallBackImpl implements ConsumerProductCallBack {
+	private static final Logger LOG = LoggerFactory.getLogger(ConsumerProductCallBackImpl.class);
+
+@Override
+	public CallBackResponse OnMessage(ConsumerProductDataDispatchModel data) {
+		//consume dispatch data
+data.getMessageToDispatch();//contains jsonString ex: Invoice details,po details
+		data.getEntityId();// Invoice id
+		data.getEntityType();//"Invoice" "PO"
+		data.getSourceProductCode();//producer product code.
+		data.getSourceProductCode();// current or consumer(destination system) product code
+		data.getTenantId();
+		data.getEventId();
+		data.getEventType();//Submitted,updated,Approved
+return new CallBackResponse(CallBackEnum.SUCCESS, "json String"); //if any error set errorObject
+}
+
+@Override
+	public DBConnection getConnection() {
+	     DBConnection dbConnection=new DBConnection();
+	     try {
+		  Class.forName("oracle.jdbc.driver.OracleDriver");
+ 		 //if ur using JDBC
+ Connection connection =DriverManager.getConnection("jdbc:oracle:thin:@192.168.2.197:1521:ORCL","username","password");  
+			
+			dbConnection.setConnection(connection);
+			return dbConnection;
+		} catch (Exception e) {
+			e.printStackTrace();
+		}  
+
+		return null;
+	}
+
+	@Override
+	public void sendNotifcation (String msg) {
+		LOG.info ("Message "+msg);
+	}
+}
+
+Create bean of ConsumerProductCallBackImpl
+Create bean of GDSConsumerConfiguration(Pass product specific DB Info)
+
+Configuration.java 
+--------------------
+@ComponentScan (basePackages = {"com.zycus.guaranteed_delivery_consumer.*"})   
+
+@Bean
+public ConsumerProductCallBack consumerProductCallBackImpl() {
+    	return new ConsumerProductCallBackImpl();
+    }
+
+@Bean
+	public GDSConsumerConfiguration getGDSConsumerConfiguration() throws GDSConsumerException {
+		return new GDSConsumerConfiguration("oracle.jdbc.driver.OracleDriver", "jdbc:oracle:thin:@192.168.2.197:1521:ORCL", "GDS", "GDS",”EINVOICE”,”http://192.168.250.166:8092”);
+	}
+
+Create REST API- 
+baseUrl/GDS/postbox/consumer
+Method-type : POST
+Content–type  : application/json
+
+Call:
+------
+GDSCConsumerRequestService.updateCapturedEventData(GDSCConsumerRequest gdsCConsumerRequest);

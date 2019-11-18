@@ -1,0 +1,121 @@
+Pre requisites
+--------------
+-unique product code.
+
+Setup
+-----
+-Add maven dependancy-
+<dependency>
+	<groupId>com.zycus.guaranteed-delivery-producer </groupId>	<artifactId> guaranteed-delivery-producer </artifactId>
+	<version>${LATEST_RELEASED_VERSION_ON_ARTIFACTREPO}</version>
+</dependency>
+
+-Implement GDSProducerCallBack Interface
+-override all three methods.
+1.	public CapturedEventData captureEvent(EventInfo eventInfo);
+2.	public DBConnection getConnection();
+3.	public void sendNotifcation(String msg);
+
+
+@Service
+public class GDSProducerCallBackImpl implements GDSProducerCallBack {
+	private static final Logger LOG = LoggerFactory.getLogger(GDSProducerCallBackImpl.class);
+	
+	@Override
+	public CapturedEventData captureEvent(EventInfo eventInfo) {
+		CapturedEventData capturedEventData=new CapturedEventData();
+		capturedEventData.setEventInfo(eventInfo);
+		List<GDSMessage> messageSet=new ArrayList<>();
+		GDSMessage gdsMessage=new GDSMessage();
+		gdsMessage.setData("123");
+		gdsMessage.setType("EInvoice");
+		messageSet.add(gdsMessage);
+		capturedEventData.setMessageSet(messageSet);
+		return capturedEventData;
+	}
+
+	@Override
+	public DBConnection getConnection() {
+	     DBConnection dbConnection=new DBConnection();
+	     try {
+		  Class.forName("oracle.jdbc.driver.OracleDriver");
+ 		 //if ur using JDBC pass singleton class
+ Connection connection =DriverManager.getConnection("jdbc:oracle:thin:@192.168.2.197:1521:ORCL","username","password"); 
+			dbConnection.setConnection(connection);
+			return dbConnection;
+		} catch (Exception e) {
+			e.printStackTrace();
+		}  
+
+		return null;
+	}
+
+	@Override
+	public void sendNotifcation(String msg) {
+		LOG.info("Message "+msg);
+	}
+}
+
+-create GDSProducerConfiguration bean
+
+<bean id="gdsProducerConfiguration" class="com.zycus.guaranteed_delivery_producer.configuration.GDSProducerConfiguration">
+      <constructor-arg type="java.lang.String" value="EINVOICE" /> //productCode
+      <constructor-arg type="java.lang.String" value="http://192.168.250.166:8092" /> //gdsEndPoint
+     <constructor-arg type="java.lang.String" value="oracle.jdbc.driver.OracleDriver" /> //driverClass
+	 <constructor-arg type="java.lang.String" value="jdbc:oracle:thin:@192.168.2.197:1521:ORCL" /> //dbUrl
+	 <constructor-arg type="java.lang.String" value="GDS" /> //dbUserName
+	 <constructor-arg type="java.lang.String" value="GDS" /> //dbPassword
+</bean>
+   
+-create EventInfo object and set values
+EventInfo eventInfo=new EventInfo();
+eventInfo.setEventId(UUID.randomUUID().toString());//reference key for //product and GD which is unique
+eventInfo.setEventType("SUBMITTED");
+eventInfo.setEntityId("1");
+eventInfo.setEntityType("INVOICE");//PO,Invoice,
+eventInfo.setBussinesRefId("EINVOICE");
+eventInfo.setTenantId("123456");
+TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+eventInfo.setTimeStamp(new Date());
+eventInfo.setVersion("V1");
+return eventInfo;
+
+-call GDSProducerService.saveProducerEvent(EventInfo eventInfo , DBConnection dbConnection) throws GDSProducerException;
+
+GDSProducerException
+--------------------
+<RECOVERY_TYPE> - <PRODUCT_ID> - <CLIENT_OR_SERVER> - <BUSINESS_CODE>
+NR-GDPC-C-2000
+
+-Create a bean for class GDSProducerConfiguration by calling a constructor
+
+-configuration at central gds
+	{	"ruleData" : [{
+				"targetProductCode": "ICONSOLE", //destination product
+				"messageType" : "TYPEA", //TypeA for IConsole,TypeB for eproc
+				"isTMS" : false, //TMS to use
+				"isConsulKey" : false, should the url has to be taken from consul
+				"url" : "http://10.30.30.86:8082/consumer-ICONSOLE" //destination url
+			}]
+	}
+
+	
+-create a callback url 
+baseUrl/GDS/postbox/producer
+Method-type : POST
+Content–type : application/json 
+{
+	"gdsPostBoxMessage": {
+		"gdsSource": "EPROC",
+		"gdsDestination": "ECATALOG",
+		"gdsMessageType": "",
+		"sourceId": "ECATALOG",
+		"destinationId": "EPROC",
+		"message": {
+			"eventId": "ECATALOGC1",
+			"entityId": "IO1",
+			"eventType": "REJECTED",
+			"entityType": "IO",
+			"messageType": "TypeA"
+		}
+	}
